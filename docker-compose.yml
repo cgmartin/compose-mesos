@@ -6,7 +6,7 @@
 # https://registry.hub.docker.com/u/jplock/zookeeper/
 #
 zk1:
-  image: jplock/zookeeper:3.4.6
+  image: mesoscloud/zookeeper:latest
 
 #
 # Mesos master
@@ -15,7 +15,7 @@ zk1:
 # http://mesos.apache.org/documentation/latest/configuration/
 #
 mesos1:
-  image: redjack/mesos-master:0.21.0
+  image: mesoscloud/mesos-master:0.23.0-ubuntu-14.04
   ports:
     - "5050:5050"
   links:
@@ -24,7 +24,7 @@ mesos1:
     MESOS_LOG_DIR: /var/log
     MESOS_CLUSTER: localmesos
     MESOS_ZK: zk://zookeeper1:2181/mesos
-    MESOS_HOSTNAME: 192.168.59.103
+    MESOS_HOSTNAME: 192.168.99.100
     MESOS_WORK_DIR: /var/lib/mesos
     MESOS_QUORUM: 1
 
@@ -35,7 +35,7 @@ mesos1:
 # http://mesos.apache.org/documentation/latest/configuration/
 #
 slave1:
-  image: redjack/mesos-slave:0.21.0
+  image: mesoscloud/mesos-slave:0.23.0-ubuntu-14.04
   ports:
     - "5051:5051"
   links:
@@ -46,7 +46,7 @@ slave1:
     MESOS_ISOLATOR: "cgroups/cpu,cgroups/mem"
     MESOS_CONTAINERIZERS: "docker,mesos"
     MESOS_EXECUTOR_REGISTRATION_TIMEOUT: "5mins"
-    MESOS_HOSTNAME: 192.168.59.103
+    MESOS_HOSTNAME: 192.168.99.100
     MESOS_PORT: "5051"
     MESOS_LOG_DIR: /var/log
   volumes:
@@ -54,7 +54,7 @@ slave1:
     - /usr/local/bin/docker:/usr/local/bin/docker
     - /sys/fs/cgroup:/sys/fs/cgroup
 slave2:
-  image: redjack/mesos-slave:0.21.0
+  image: mesoscloud/mesos-slave:0.23.0-ubuntu-14.04
   ports:
     - "5052:5052"
   links:
@@ -65,13 +65,13 @@ slave2:
     MESOS_ISOLATOR: "cgroups/cpu,cgroups/mem"
     MESOS_CONTAINERIZERS: "docker,mesos"
     MESOS_EXECUTOR_REGISTRATION_TIMEOUT: "5mins"
-    MESOS_HOSTNAME: 192.168.59.103
+    MESOS_HOSTNAME: 192.168.99.100
     MESOS_PORT: "5052"
     MESOS_LOG_DIR: /var/log
   volumes_from:
     - "slave1"
 slave3:
-  image: redjack/mesos-slave:0.21.0
+  image: mesoscloud/mesos-slave:0.23.0-ubuntu-14.04
   ports:
     - "5053:5053"
   links:
@@ -82,7 +82,7 @@ slave3:
     MESOS_ISOLATOR: "cgroups/cpu,cgroups/mem"
     MESOS_CONTAINERIZERS: "docker,mesos"
     MESOS_EXECUTOR_REGISTRATION_TIMEOUT: "5mins"
-    MESOS_HOSTNAME: 192.168.59.103
+    MESOS_HOSTNAME: 192.168.99.100
     MESOS_PORT: "5053"
     MESOS_LOG_DIR: /var/log
   volumes_from:
@@ -91,16 +91,18 @@ slave3:
 #
 # Marathon
 #
-# https://registry.hub.docker.com/u/mesosphere/marathon/
+# https://registry.hub.docker.com/u/mesoscloud/marathon/
 #
 marathon:
-  image: mesosphere/marathon:v0.8.1
+  image: mesoscloud/marathon:0.9.1-ubuntu-14.04
   ports:
     - "8080:8080"
   links:
     - "zk1:zookeeper1"
     - "mesos1"
-  command: "--master zk://zookeeper1:2181/mesos --zk zk://zookeeper1:2181/marathon"
+  environment:
+    MARATHON_MASTER: zk://zookeeper1:2181/mesos
+    MARATHON_ZK: zk://zookeeper1:2181/marathon
 
 #
 # Chronos
@@ -108,10 +110,12 @@ marathon:
 # https://registry.hub.docker.com/u/tomaskral/chronos
 #
 chronos:
-  image: tomaskral/chronos:2.3.2-mesos0.21.1
+  image: mesoscloud/chronos:latest
   ports:
     - "4400:8080"
   links:
     - "zk1:zookeeper1"
     - mesos1
-  command: "--master zk://zookeeper1:2181/mesos --zk_hosts zk://zookeeper1:2181/mesos"
+  environment:
+    CHRONOS_MASTER: zk://zookeeper1:2181/mesos
+    CHRONOS_ZK_HOSTS: zookeeper1:2181
