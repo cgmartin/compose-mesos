@@ -5,6 +5,8 @@ A [Docker Compose][] sandbox environment with [Marathon][], [Chronos][], and a [
 
 `docker-compose up`
 
+Then access the various components via the correct port:
+
 - Marathon URL: http://DOCKER_HOST:8080
 - Mesos URL: http://DOCKER_HOST:5050
 - Chronos URL: http://DOCKER_HOST:4400
