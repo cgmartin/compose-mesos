@@ -5,7 +5,7 @@
 #
 # https://registry.hub.docker.com/u/jplock/zookeeper/
 #
-zk1:
+zookeeper:
   image: mesoscloud/zookeeper:latest
 
 #
@@ -14,16 +14,16 @@ zk1:
 # https://registry.hub.docker.com/u/redjack/mesos-master/
 # http://mesos.apache.org/documentation/latest/configuration/
 #
-mesos1:
+mesosMaster:
   image: mesoscloud/mesos-master:0.23.0-ubuntu-14.04
   ports:
     - "5050:5050"
   links:
-    - "zk1:zookeeper1"
+    - "zookeeper"
   environment:
     MESOS_LOG_DIR: /var/log
     MESOS_CLUSTER: localmesos
-    MESOS_ZK: zk://zookeeper1:2181/mesos
+    MESOS_ZK: zk://zookeeper:2181/mesos
     MESOS_HOSTNAME: 192.168.99.100
     MESOS_WORK_DIR: /var/lib/mesos
     MESOS_QUORUM: 1
@@ -34,15 +34,15 @@ mesos1:
 # https://registry.hub.docker.com/u/redjack/mesos-slave/
 # http://mesos.apache.org/documentation/latest/configuration/
 #
-slave1:
+mesosSlave1:
   image: mesoscloud/mesos-slave:0.23.0-ubuntu-14.04
   ports:
     - "5051:5051"
   links:
-    - "zk1:zookeeper1"
-    - "mesos1"
+    - "zookeeper"
+    - "mesosMaster"
   environment:
-    MESOS_MASTER: zk://zookeeper1:2181/mesos
+    MESOS_MASTER: zk://zookeeper:2181/mesos
     MESOS_ISOLATOR: "cgroups/cpu,cgroups/mem"
     MESOS_CONTAINERIZERS: "docker,mesos"
     MESOS_EXECUTOR_REGISTRATION_TIMEOUT: "5mins"
@@ -53,15 +53,16 @@ slave1:
     - /var/run/docker.sock:/var/run/docker.sock
     - /usr/local/bin/docker:/usr/local/bin/docker
     - /sys/fs/cgroup:/sys/fs/cgroup
-slave2:
+    
+mesosSlave2:
   image: mesoscloud/mesos-slave:0.23.0-ubuntu-14.04
   ports:
     - "5052:5052"
   links:
-    - "zk1:zookeeper1"
-    - "mesos1"
+    - "zookeeper"
+    - "mesosMaster"
   environment:
-    MESOS_MASTER: zk://zookeeper1:2181/mesos
+    MESOS_MASTER: zk://zookeeper:2181/mesos
     MESOS_ISOLATOR: "cgroups/cpu,cgroups/mem"
     MESOS_CONTAINERIZERS: "docker,mesos"
     MESOS_EXECUTOR_REGISTRATION_TIMEOUT: "5mins"
@@ -69,16 +70,17 @@ slave2:
     MESOS_PORT: "5052"
     MESOS_LOG_DIR: /var/log
   volumes_from:
-    - "slave1"
-slave3:
+    - "mesosSlave1"
+    
+mesosSlave3:
   image: mesoscloud/mesos-slave:0.23.0-ubuntu-14.04
   ports:
     - "5053:5053"
   links:
-    - "zk1:zookeeper1"
-    - "mesos1"
+    - "zookeeper"
+    - "mesosMaster"
   environment:
-    MESOS_MASTER: zk://zookeeper1:2181/mesos
+    MESOS_MASTER: zk://zookeeper:2181/mesos
     MESOS_ISOLATOR: "cgroups/cpu,cgroups/mem"
     MESOS_CONTAINERIZERS: "docker,mesos"
     MESOS_EXECUTOR_REGISTRATION_TIMEOUT: "5mins"
@@ -86,7 +88,7 @@ slave3:
     MESOS_PORT: "5053"
     MESOS_LOG_DIR: /var/log
   volumes_from:
-    - "slave1"
+    - "mesosSlave1"
 
 #
 # Marathon
@@ -98,11 +100,11 @@ marathon:
   ports:
     - "8080:8080"
   links:
-    - "zk1:zookeeper1"
-    - "mesos1"
+    - "zookeeper"
+    - "mesosMaster"
   environment:
-    MARATHON_MASTER: zk://zookeeper1:2181/mesos
-    MARATHON_ZK: zk://zookeeper1:2181/marathon
+    MARATHON_MASTER: zk://zookeeper:2181/mesos
+    MARATHON_ZK: zk://zookeeper:2181/marathon
 
 #
 # Chronos
@@ -114,8 +116,75 @@ chronos:
   ports:
     - "4400:8080"
   links:
-    - "zk1:zookeeper1"
-    - mesos1
+    - "zookeeper"
+    - "mesosMaster"
   environment:
-    CHRONOS_MASTER: zk://zookeeper1:2181/mesos
-    CHRONOS_ZK_HOSTS: zookeeper1:2181
+    CHRONOS_MASTER: zk://zookeeper:2181/mesos
+    CHRONOS_ZK_HOSTS: zookeeper:2181
+
+#
+# Consul - Service Discovery
+# 
+# https://hub.docker.com/r/gliderlabs/consul-server/
+# https://hub.docker.com/r/progrium/consul/
+#
+consul:
+  image: gliderlabs/consul-server:latest
+  # replace advertise IP with main interface ROUTABLE_IP
+  command: -bootstrap -advertise=10.0.2.15 -client=0.0.0.0 -data-dir=/tmp/consul
+  volumes:
+    - "/var/run/docker.sock:/tmp/docker.sock" # for optional docker health checks
+  ports:
+    - "8300:8300"
+    - "8301:8301"
+    - "8301:8301/udp"
+    - "8302:8302"
+    - "8302:8302/udp"
+    - "8400:8400"
+    - "8500:8500"
+    - "172.17.42.1:53:8600"     # docker0 interface for dns
+    - "172.17.42.1:53:8600/udp" # docker0 interface for dns
+
+#
+# Mesos to Consul bridge for service discovery
+# (Uses Mesos for discovery)
+#
+# https://hub.docker.com/r/ciscocloud/mesos-consul/
+# 
+# NOTE: I am encountering issues with this config, apps are not fully scaling up.
+#       Switching over to use Registrator as alternate solution. ~CGM 8/20/2015    
+#
+#mesosConsul:   
+#  image: ciscocloud/mesos-consul:latest  
+#  command: --zk=zk://zookeeper:2181/mesos
+#  links:
+#    - "zookeeper"
+    
+#
+# Docker Service Registry Bridge
+# (Docker-only discovery, not Mesos)
+# 
+# https://hub.docker.com/r/gliderlabs/registrator/
+#
+registrator:
+  image: gliderlabs/registrator:v5
+  command: -ip=10.0.2.15 consul://consul:8500
+  links:
+    - "consul"
+  volumes:
+    - "/var/run/docker.sock:/tmp/docker.sock"    
+
+#
+# Load Balancer: HAProxy with Consul-Template
+#
+# https://hub.docker.com/r/ciscocloud/haproxy-consul/
+#
+haproxy:
+  image: ciscocloud/haproxy-consul:latest
+  dns: 172.17.42.1  
+  links:
+    - "consul"
+  ports:
+    - "80:80"    
+  environment:
+    HAPROXY_DOMAIN: docker.local 
