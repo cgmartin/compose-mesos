@@ -50,6 +50,7 @@ DNS name `{app}.docker.local` and the [Marathon][] app ID. See [haproxy-consul][
 [chronos]: http://mesos.github.io/chronos/
 [mesos]: http://mesos.apache.org/
 [consul]: https://www.consul.io/
+[consul-template]: https://github.com/hashicorp/consul-template
 [registrator]: http://gliderlabs.com/registrator/latest/
 [haproxy]: http://www.haproxy.org/
 [haproxy-consul]: https://github.com/CiscoCloud/haproxy-consul
